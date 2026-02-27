@@ -5,11 +5,9 @@
  */
 
 // ─────────────────────────────────────────────
-// EDITOR SCHEMA
-// Passed to ha-form — HA renders all pickers natively
+// ha-form schema — non-colour fields only
 // ─────────────────────────────────────────────
-const BULL_SCHEMA = [
-  // ── Entity & Label ──────────────────────────
+const BULL_SCHEMA_TOP = [
   {
     name: "entity",
     label: "Entity",
@@ -20,30 +18,9 @@ const BULL_SCHEMA = [
     label: "Friendly Name",
     selector: { text: {} },
   },
+];
 
-  // ── Colours ─────────────────────────────────
-  {
-    name: "active_color",
-    label: "Active Colour (entity ON)",
-    selector: { text: {} },
-  },
-  {
-    name: "inactive_color",
-    label: "Inactive Colour (entity OFF)",
-    selector: { text: {} },
-  },
-  {
-    name: "name_color",
-    label: "Name Text Colour",
-    selector: { text: {} },
-  },
-  {
-    name: "icon_color",
-    label: "Icon Colour",
-    selector: { text: {} },
-  },
-
-  // ── Flash ────────────────────────────────────
+const BULL_SCHEMA_FLASH = [
   {
     name: "flash_enabled",
     label: "Enable Flash Animation",
@@ -54,8 +31,9 @@ const BULL_SCHEMA = [
     label: "Flash Speed (ms)",
     selector: { number: { min: 150, max: 1500, step: 50, mode: "slider" } },
   },
+];
 
-  // ── Icon ─────────────────────────────────────
+const BULL_SCHEMA_ICON = [
   {
     name: "show_icon",
     label: "Show Icon",
@@ -66,17 +44,18 @@ const BULL_SCHEMA = [
     label: "Icon",
     selector: { icon: {} },
   },
+];
 
-  // ── Layout ───────────────────────────────────
+const BULL_SCHEMA_LAYOUT = [
   {
     name: "text_align",
     label: "Text Alignment",
     selector: {
       select: {
         options: [
-          { value: "left",   label: "Left"   },
-          { value: "center", label: "Center" },
-          { value: "right",  label: "Right"  },
+          { value: "left",   label: "⬅  Left"   },
+          { value: "center", label: "↔  Center" },
+          { value: "right",  label: "➡  Right"  },
         ],
       },
     },
@@ -94,16 +73,48 @@ const BULL_SCHEMA = [
 ];
 
 // ─────────────────────────────────────────────
+// COLOUR CONFIG
+// ─────────────────────────────────────────────
+const COLOUR_FIELDS = [
+  {
+    key:         "active_color",
+    label:       "Active",
+    description: "Card colour when entity is ON",
+    default:     "#ff3b3b",
+  },
+  {
+    key:         "inactive_color",
+    label:       "Inactive",
+    description: "Card colour when entity is OFF",
+    default:     "#2c2c2e",
+  },
+  {
+    key:         "name_color",
+    label:       "Label Text",
+    description: "Colour of the name text",
+    default:     "#ffffff",
+  },
+  {
+    key:         "icon_color",
+    label:       "Icon",
+    description: "Colour of the icon",
+    default:     "#ffffff",
+  },
+];
+
+// ─────────────────────────────────────────────
 // VISUAL EDITOR
-// Uses ha-form — HA owns all picker rendering
+// Hybrid: ha-form for pickers/toggles/sliders,
+// native <input type=color> for colour fields
 // ─────────────────────────────────────────────
 class BullButtonCardEditor extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
-    this._config = {};
-    this._hass   = null;
-    this._form   = null;
+    this._config   = {};
+    this._hass     = null;
+    this._built    = false;
+    this._forms    = {};   // keyed by section name
   }
 
   setConfig(config) {
@@ -121,47 +132,314 @@ class BullButtonCardEditor extends HTMLElement {
       card_height:    "54px",
       ...config,
     };
-    this._attach();
+    this._build();
+    this._syncColours();
+    this._syncForms();
   }
 
   set hass(hass) {
     this._hass = hass;
-    this._attach();
+    this._build();
+    this._syncForms();
   }
 
-  // Build the ha-form once; update its properties every time config or hass changes
-  _attach() {
-    if (!this._hass || !this._config) return;
+  // ── Build the shadow DOM once ──────────────────────────────────
+  _build() {
+    if (this._built || !this._hass) return;
+    this._built = true;
 
-    if (!this._form) {
-      // Style the host
-      const style = document.createElement("style");
-      style.textContent = `
-        :host { display: block; }
-        ha-form { display: block; }
+    this.shadowRoot.innerHTML = `
+      <style>
+        :host {
+          display: block;
+          font-family: var(--primary-font-family, 'Segoe UI', sans-serif);
+        }
+
+        /* ── Section headers ── */
+        .section {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin: 20px 0 4px;
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 0.09em;
+          text-transform: uppercase;
+          color: var(--secondary-text-color, #6b7280);
+        }
+        .section svg {
+          flex-shrink: 0;
+          opacity: 0.7;
+        }
+        .section::after {
+          content: '';
+          flex: 1;
+          height: 1px;
+          background: var(--divider-color, rgba(0,0,0,0.12));
+        }
+
+        /* ── Colour grid ── */
+        .colour-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+          margin-bottom: 4px;
+        }
+
+        .colour-card {
+          border: 1px solid var(--divider-color, rgba(0,0,0,0.12));
+          border-radius: 10px;
+          overflow: hidden;
+          cursor: pointer;
+          transition: box-shadow 0.15s, border-color 0.15s;
+          position: relative;
+        }
+        .colour-card:hover {
+          box-shadow: 0 2px 10px rgba(0,0,0,0.12);
+          border-color: var(--primary-color, #03a9f4);
+        }
+
+        /* Top swatch strip */
+        .colour-swatch {
+          height: 44px;
+          width: 100%;
+          display: block;
+          position: relative;
+        }
+        .colour-swatch input[type="color"] {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          opacity: 0;
+          cursor: pointer;
+          border: none;
+          padding: 0;
+        }
+        .colour-swatch-preview {
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+        }
+        /* Checkerboard fallback for transparent */
+        .colour-swatch::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background-image:
+            linear-gradient(45deg, #ccc 25%, transparent 25%),
+            linear-gradient(-45deg, #ccc 25%, transparent 25%),
+            linear-gradient(45deg, transparent 75%, #ccc 75%),
+            linear-gradient(-45deg, transparent 75%, #ccc 75%);
+          background-size: 8px 8px;
+          background-position: 0 0, 0 4px, 4px -4px, -4px 0px;
+          opacity: 0.3;
+          pointer-events: none;
+        }
+
+        /* Bottom label + hex row */
+        .colour-info {
+          padding: 6px 8px 7px;
+          background: var(--card-background-color, #fff);
+        }
+        .colour-label {
+          font-size: 11px;
+          font-weight: 700;
+          color: var(--primary-text-color);
+          letter-spacing: 0.02em;
+          margin-bottom: 1px;
+        }
+        .colour-desc {
+          font-size: 10px;
+          color: var(--secondary-text-color, #6b7280);
+          margin-bottom: 4px;
+          line-height: 1.3;
+        }
+        .colour-hex-row {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+        .colour-dot {
+          width: 12px; height: 12px;
+          border-radius: 50%;
+          border: 1px solid rgba(0,0,0,0.15);
+          flex-shrink: 0;
+        }
+        .colour-hex {
+          flex: 1;
+          font-size: 11px;
+          font-family: monospace;
+          border: none;
+          background: none;
+          color: var(--secondary-text-color, #6b7280);
+          padding: 0;
+          width: 0; /* flex will grow it */
+          min-width: 0;
+        }
+        .colour-hex:focus {
+          outline: none;
+          color: var(--primary-text-color);
+        }
+        .colour-edit-icon {
+          opacity: 0;
+          transition: opacity 0.15s;
+          color: var(--secondary-text-color);
+          font-size: 14px;
+          line-height: 1;
+        }
+        .colour-card:hover .colour-edit-icon {
+          opacity: 1;
+        }
+
+        /* ── ha-form blocks ── */
+        ha-form {
+          display: block;
+        }
+      </style>
+
+      <!-- Entity & Label -->
+      <div class="section">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+        Entity &amp; Label
+      </div>
+      <div id="form-top"></div>
+
+      <!-- Colours -->
+      <div class="section">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="6.5" cy="10.5" r="2.5"/><circle cx="17.5" cy="14.5" r="2.5"/><circle cx="10" cy="18" r="2.5"/></svg>
+        Colours
+      </div>
+      <div class="colour-grid" id="colour-grid"></div>
+
+      <!-- Flash Animation -->
+      <div class="section">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        Flash Animation
+      </div>
+      <div id="form-flash"></div>
+
+      <!-- Icon -->
+      <div class="section">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Icon
+      </div>
+      <div id="form-icon"></div>
+
+      <!-- Layout -->
+      <div class="section">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/></svg>
+        Layout
+      </div>
+      <div id="form-layout"></div>
+    `;
+
+    // ── Build colour grid ───────────────────────────────────────
+    const grid = this.shadowRoot.getElementById("colour-grid");
+    for (const field of COLOUR_FIELDS) {
+      const val = (this._config[field.key] || field.default).toLowerCase();
+
+      const card = document.createElement("div");
+      card.className = "colour-card";
+      card.dataset.key = field.key;
+      card.innerHTML = `
+        <label class="colour-swatch">
+          <div class="colour-swatch-preview" style="background:${val}"></div>
+          <input type="color" value="${val}">
+        </label>
+        <div class="colour-info">
+          <div class="colour-label">${field.label}</div>
+          <div class="colour-desc">${field.description}</div>
+          <div class="colour-hex-row">
+            <div class="colour-dot" style="background:${val}"></div>
+            <input class="colour-hex" type="text" value="${val}" maxlength="7" spellcheck="false">
+            <span class="colour-edit-icon">✎</span>
+          </div>
+        </div>
       `;
-      this.shadowRoot.appendChild(style);
 
-      // Create ha-form once
-      this._form = document.createElement("ha-form");
-      this._form.computeLabel = (schema) => schema.label || schema.name;
-      this._form.addEventListener("value-changed", (e) => {
-        this._config = e.detail.value;
-        this.dispatchEvent(
-          new CustomEvent("config-changed", {
-            detail: { config: this._config },
-            bubbles: true,
-            composed: true,
-          })
-        );
+      const nativePicker = card.querySelector("input[type=color]");
+      const hexInput     = card.querySelector(".colour-hex");
+      const preview      = card.querySelector(".colour-swatch-preview");
+      const dot          = card.querySelector(".colour-dot");
+
+      const apply = (hex) => {
+        preview.style.background = hex;
+        dot.style.background     = hex;
+        nativePicker.value       = hex;
+        hexInput.value           = hex;
+        this._config = { ...this._config, [field.key]: hex };
+        this._fire();
+      };
+
+      nativePicker.addEventListener("input",  () => apply(nativePicker.value));
+      nativePicker.addEventListener("change", () => apply(nativePicker.value));
+
+      hexInput.addEventListener("input", () => {
+        const v = hexInput.value.trim();
+        if (/^#[0-9a-fA-F]{6}$/.test(v)) apply(v);
       });
-      this.shadowRoot.appendChild(this._form);
+      hexInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") hexInput.blur();
+      });
+
+      grid.appendChild(card);
     }
 
-    // Update every time either config or hass changes
-    this._form.hass   = this._hass;
-    this._form.schema = BULL_SCHEMA;
-    this._form.data   = this._config;
+    // ── Build ha-form blocks ────────────────────────────────────
+    const makeForm = (slotId, schema) => {
+      const form = document.createElement("ha-form");
+      form.hass         = this._hass;
+      form.schema       = schema;
+      form.data         = this._config;
+      form.computeLabel = (s) => s.label || s.name;
+      form.addEventListener("value-changed", (e) => {
+        this._config = { ...this._config, ...e.detail.value };
+        this._syncColours();
+        this._fire();
+      });
+      this.shadowRoot.getElementById(slotId).appendChild(form);
+      this._forms[slotId] = form;
+    };
+
+    makeForm("form-top",    BULL_SCHEMA_TOP);
+    makeForm("form-flash",  BULL_SCHEMA_FLASH);
+    makeForm("form-icon",   BULL_SCHEMA_ICON);
+    makeForm("form-layout", BULL_SCHEMA_LAYOUT);
+  }
+
+  // ── Keep ha-form data in sync ──────────────────────────────────
+  _syncForms() {
+    if (!this._built) return;
+    for (const form of Object.values(this._forms)) {
+      if (this._hass) form.hass = this._hass;
+      form.data = this._config;
+    }
+  }
+
+  // ── Keep colour swatches in sync ───────────────────────────────
+  _syncColours() {
+    if (!this._built) return;
+    for (const field of COLOUR_FIELDS) {
+      const card = this.shadowRoot.querySelector(`.colour-card[data-key="${field.key}"]`);
+      if (!card) continue;
+      const val  = (this._config[field.key] || field.default).toLowerCase();
+      card.querySelector(".colour-swatch-preview").style.background = val;
+      card.querySelector(".colour-dot").style.background            = val;
+      card.querySelector("input[type=color]").value                 = val;
+      card.querySelector(".colour-hex").value                       = val;
+    }
+  }
+
+  // ── Fire config-changed ─────────────────────────────────────────
+  _fire() {
+    this.dispatchEvent(
+      new CustomEvent("config-changed", {
+        detail:   { config: this._config },
+        bubbles:  true,
+        composed: true,
+      })
+    );
   }
 }
 
