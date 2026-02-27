@@ -1,9 +1,7 @@
 # 🐂 Bull Button Card
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge&logo=homeassistantcommunitystore)](https://my.home-assistant.io/redirect/hacs_repository/?owner=jamesmcginnis&repository=bull-button-card&category=plugin)
-[![GitHub release (latest by date)](https://img.shields.io/github/v/release/jamesmcginnis/bull-button-card?style=for-the-badge&color=41BDF5)](https://github.com/jamesmcginnis/bull-button-card/releases)
-[![GitHub stars](https://img.shields.io/github/stars/jamesmcginnis/bull-button-card?style=for-the-badge&color=41BDF5)](https://github.com/jamesmcginnis/bull-button-card/stargazers)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+
 
 A pill-shaped, entity-driven button card for [Home Assistant](https://www.home-assistant.io/) with flash animation, custom colours, SVG icon support, and a fully featured visual editor.
 
@@ -98,19 +96,6 @@ card_height: 54px
 
 ---
 
-## 🛠️ Development
-
-```bash
-# Clone the repository
-git clone https://github.com/jamesmcginnis/bull-button-card.git
-cd bull-button-card
-
-# Copy the JS file to your HA /config/www/ folder and reload
-cp bull-button-card.js /path/to/homeassistant/config/www/
-```
-
----
-
 ## 📄 License
 
 Distributed under the MIT License. See [`LICENSE`](LICENSE) for more information.
@@ -120,8 +105,3 @@ Distributed under the MIT License. See [`LICENSE`](LICENSE) for more information
 ## 🙏 Acknowledgements
 
 - Built for the [Home Assistant](https://www.home-assistant.io/) community
-- Installed and managed via [HACS](https://hacs.xyz/)
-
----
-
-<p align="center">Made with ❤️ for the Home Assistant community</p>
