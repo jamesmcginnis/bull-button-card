@@ -452,7 +452,8 @@ class BullButtonCard extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
-    // Flash is driven by CSS animation — no interval needed
+    this._flashInterval = null;
+    this._flashState    = false;
   }
 
   static getConfigElement() {
@@ -510,36 +511,27 @@ class BullButtonCard extends HTMLElement {
   }
 
   _stopFlash() {
-    const pill   = this.shadowRoot.querySelector(".bull-pill");
-    const fStyle = this.shadowRoot.getElementById("bull-flash-style");
-    if (pill)   pill.style.removeProperty("animation");
-    if (fStyle) fStyle.textContent = "";
+    if (this._flashInterval) {
+      clearInterval(this._flashInterval);
+      this._flashInterval = null;
+    }
   }
 
   _startFlash() {
     this._stopFlash();
     const pill   = this.shadowRoot.querySelector(".bull-pill");
-    const fStyle = this.shadowRoot.getElementById("bull-flash-style");
-    if (!pill || !fStyle) return;
-
-    const speed    = parseInt(this._config.flash_speed, 10) || 600;
-    const active   = this._config.active_color   || "#ff3b3b";
-    const inactive = this._config.inactive_color || "#2c2c2e";
-    const duration = speed * 2;
-
-    fStyle.textContent = `
-      @keyframes bull-pulse {
-        0%, 100% {
-          background: ${inactive};
-          box-shadow: none;
-        }
-        50% {
-          background: ${active};
-          box-shadow: 0 0 22px 6px ${active}55;
-        }
-      }
-    `;
-    pill.style.animation = `bull-pulse ${duration}ms ease-in-out infinite`;
+    if (!pill) return;
+    const speed  = parseInt(this._config.flash_speed, 10) || 600;
+    const active = this._config.active_color || "#ff3b3b";
+    this._flashState      = true;
+    pill.style.background = active;
+    this._flashInterval   = setInterval(() => {
+      this._flashState      = !this._flashState;
+      pill.style.background = this._flashState ? active : "transparent";
+      pill.style.boxShadow  = this._flashState
+        ? `0 0 18px 4px ${active}88`
+        : "none";
+    }, speed);
   }
 
   _updateState() {
@@ -591,7 +583,7 @@ class BullButtonCard extends HTMLElement {
           gap: 10px;
           cursor: pointer;
           user-select: none;
-          transition: box-shadow 0.25s;
+          transition: background 0.25s, box-shadow 0.25s;
           position: relative;
           overflow: hidden;
           background: ${c.inactive_color || "#2c2c2e"};
@@ -615,7 +607,6 @@ class BullButtonCard extends HTMLElement {
           color: ${c.icon_color || "#ffffff"};
         }
         .bull-name {
-          font-family: var(--primary-font-family, var(--mdc-typography-font-family, inherit));
           font-size: ${c.font_size || "14px"};
           font-weight: 600;
           color: ${c.name_color || "#ffffff"};
@@ -635,7 +626,6 @@ class BullButtonCard extends HTMLElement {
           <span class="bull-name">${c.name || c.entity || "Button"}</span>
         </div>
       </ha-card>
-      <style id="bull-flash-style"></style>
     `;
 
     this.shadowRoot.querySelector(".bull-pill")
