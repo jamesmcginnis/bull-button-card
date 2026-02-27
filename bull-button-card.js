@@ -21,8 +21,8 @@ class BullButtonCardEditor extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
-    const entityPicker = this.shadowRoot.getElementById("entity");
-    const iconPicker   = this.shadowRoot.getElementById("icon");
+    const entityPicker = this.shadowRoot.querySelector("#entity-slot ha-entity-picker");
+    const iconPicker   = this.shadowRoot.querySelector("#icon-slot ha-icon-picker");
     if (entityPicker) entityPicker.hass = hass;
     if (iconPicker)   iconPicker.hass   = hass;
     if (!entityPicker) this._render();
@@ -157,8 +157,8 @@ class BullButtonCardEditor extends HTMLElement {
         }
         .toggle input:checked + .toggle-slider { background: var(--primary-color, #03a9f4); }
         .toggle input:checked + .toggle-slider::before { transform: translateX(20px); }
-        ha-entity-picker,
-        ha-icon-picker { flex: 1; }
+        #entity-slot,
+        #icon-slot { flex: 1; }
       </style>
       <div class="editor">
 
@@ -166,7 +166,7 @@ class BullButtonCardEditor extends HTMLElement {
 
         <div class="row">
           <label>Entity</label>
-          <ha-entity-picker id="entity" allow-custom-entity></ha-entity-picker>
+          <div id="entity-slot"></div>
         </div>
 
         <div class="row">
@@ -235,7 +235,7 @@ class BullButtonCardEditor extends HTMLElement {
 
         <div class="row">
           <label>Icon</label>
-          <ha-icon-picker id="icon" placeholder="mdi:lightbulb"></ha-icon-picker>
+          <div id="icon-slot"></div>
         </div>
 
         <div class="section-title">Layout</div>
@@ -295,26 +295,34 @@ class BullButtonCardEditor extends HTMLElement {
       });
     };
 
-    // ha-entity-picker — must be wired imperatively
-    const entityPicker = this.shadowRoot.getElementById("entity");
-    if (entityPicker && this._hass) {
-      entityPicker.hass  = this._hass;
+    // ── ha-entity-picker — created imperatively so properties are set before upgrade ──
+    const entitySlot = this.shadowRoot.getElementById("entity-slot");
+    if (entitySlot) {
+      const entityPicker = document.createElement("ha-entity-picker");
+      entityPicker.style.flex = "1";
+      entityPicker.setAttribute("allow-custom-entity", "");
+      if (this._hass) entityPicker.hass = this._hass;
       entityPicker.value = c.entity || "";
       entityPicker.addEventListener("value-changed", (e) => {
         this._config = { ...this._config, entity: e.detail.value };
         this._fire(this._config);
       });
+      entitySlot.appendChild(entityPicker);
     }
 
-    // ha-icon-picker — must be wired imperatively
-    const iconPicker = this.shadowRoot.getElementById("icon");
-    if (iconPicker) {
+    // ── ha-icon-picker — same pattern ─────────────────────────────────────────────
+    const iconSlot = this.shadowRoot.getElementById("icon-slot");
+    if (iconSlot) {
+      const iconPicker = document.createElement("ha-icon-picker");
+      iconPicker.style.flex = "1";
+      iconPicker.placeholder = "mdi:lightbulb";
       if (this._hass) iconPicker.hass = this._hass;
       iconPicker.value = c.icon || "";
       iconPicker.addEventListener("value-changed", (e) => {
         this._config = { ...this._config, icon: e.detail.value };
         this._fire(this._config);
       });
+      iconSlot.appendChild(iconPicker);
     }
 
     bind("name",        "name");
