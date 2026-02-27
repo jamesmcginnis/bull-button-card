@@ -5,337 +5,163 @@
  */
 
 // ─────────────────────────────────────────────
+// EDITOR SCHEMA
+// Passed to ha-form — HA renders all pickers natively
+// ─────────────────────────────────────────────
+const BULL_SCHEMA = [
+  // ── Entity & Label ──────────────────────────
+  {
+    name: "entity",
+    label: "Entity",
+    selector: { entity: {} },
+  },
+  {
+    name: "name",
+    label: "Friendly Name",
+    selector: { text: {} },
+  },
+
+  // ── Colours ─────────────────────────────────
+  {
+    name: "active_color",
+    label: "Active Colour (entity ON)",
+    selector: { text: {} },
+  },
+  {
+    name: "inactive_color",
+    label: "Inactive Colour (entity OFF)",
+    selector: { text: {} },
+  },
+  {
+    name: "name_color",
+    label: "Name Text Colour",
+    selector: { text: {} },
+  },
+  {
+    name: "icon_color",
+    label: "Icon Colour",
+    selector: { text: {} },
+  },
+
+  // ── Flash ────────────────────────────────────
+  {
+    name: "flash_enabled",
+    label: "Enable Flash Animation",
+    selector: { boolean: {} },
+  },
+  {
+    name: "flash_speed",
+    label: "Flash Speed (ms)",
+    selector: { number: { min: 150, max: 1500, step: 50, mode: "slider" } },
+  },
+
+  // ── Icon ─────────────────────────────────────
+  {
+    name: "show_icon",
+    label: "Show Icon",
+    selector: { boolean: {} },
+  },
+  {
+    name: "icon",
+    label: "Icon",
+    selector: { icon: {} },
+  },
+
+  // ── Layout ───────────────────────────────────
+  {
+    name: "text_align",
+    label: "Text Alignment",
+    selector: {
+      select: {
+        options: [
+          { value: "left",   label: "Left"   },
+          { value: "center", label: "Center" },
+          { value: "right",  label: "Right"  },
+        ],
+      },
+    },
+  },
+  {
+    name: "font_size",
+    label: "Font Size (e.g. 14px)",
+    selector: { text: {} },
+  },
+  {
+    name: "card_height",
+    label: "Card Height (e.g. 54px)",
+    selector: { text: {} },
+  },
+];
+
+// ─────────────────────────────────────────────
 // VISUAL EDITOR
+// Uses ha-form — HA owns all picker rendering
 // ─────────────────────────────────────────────
 class BullButtonCardEditor extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
     this._config = {};
+    this._hass   = null;
+    this._form   = null;
   }
 
   setConfig(config) {
-    this._config = { ...config };
-    this._render();
+    this._config = {
+      active_color:   "#ff3b3b",
+      inactive_color: "#2c2c2e",
+      name_color:     "#ffffff",
+      icon_color:     "#ffffff",
+      flash_enabled:  true,
+      flash_speed:    600,
+      show_icon:      false,
+      icon:           "",
+      text_align:     "center",
+      font_size:      "14px",
+      card_height:    "54px",
+      ...config,
+    };
+    this._attach();
   }
 
   set hass(hass) {
     this._hass = hass;
-    const entityPicker = this.shadowRoot.querySelector("#entity-slot ha-entity-picker");
-    const iconPicker   = this.shadowRoot.querySelector("#icon-slot ha-icon-picker");
-    if (entityPicker) entityPicker.hass = hass;
-    if (iconPicker)   iconPicker.hass   = hass;
-    if (!entityPicker) this._render();
+    this._attach();
   }
 
-  _fire(config) {
-    this.dispatchEvent(
-      new CustomEvent("config-changed", {
-        detail: { config },
-        bubbles: true,
-        composed: true,
-      })
-    );
-  }
+  // Build the ha-form once; update its properties every time config or hass changes
+  _attach() {
+    if (!this._hass || !this._config) return;
 
-  _render() {
-    const c = this._config;
+    if (!this._form) {
+      // Style the host
+      const style = document.createElement("style");
+      style.textContent = `
+        :host { display: block; }
+        ha-form { display: block; }
+      `;
+      this.shadowRoot.appendChild(style);
 
-    this.shadowRoot.innerHTML = `
-      <style>
-        :host {
-          display: block;
-          font-family: var(--primary-font-family, 'Segoe UI', sans-serif);
-        }
-        .editor { padding: 8px 0; display: flex; flex-direction: column; gap: 0; }
-        .section-title {
-          font-size: 11px;
-          font-weight: 700;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
-          color: var(--secondary-text-color);
-          margin: 18px 0 6px;
-          padding-bottom: 4px;
-          border-bottom: 1px solid var(--divider-color, rgba(0,0,0,0.12));
-        }
-        .row {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 5px 0;
-        }
-        .row label {
-          flex: 0 0 160px;
-          font-size: 13px;
-          color: var(--primary-text-color);
-        }
-        .row input[type="text"],
-        .row select {
-          flex: 1;
-          height: 34px;
-          border: 1px solid var(--divider-color, #ccc);
-          border-radius: 6px;
-          padding: 0 10px;
-          font-size: 13px;
-          background: var(--card-background-color, #fff);
-          color: var(--primary-text-color);
-          box-sizing: border-box;
-        }
-        .row input[type="text"]:focus,
-        .row select:focus {
-          outline: none;
-          border-color: var(--primary-color);
-        }
-        .color-row {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 5px 0;
-        }
-        .color-row label {
-          flex: 0 0 160px;
-          font-size: 13px;
-          color: var(--primary-text-color);
-        }
-        .color-wrap {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          flex: 1;
-        }
-        .color-wrap input[type="color"] {
-          width: 42px;
-          height: 34px;
-          border: 1px solid var(--divider-color, #ccc);
-          border-radius: 6px;
-          padding: 2px;
-          cursor: pointer;
-          background: none;
-        }
-        .color-wrap input[type="text"] {
-          flex: 1;
-          height: 34px;
-          border: 1px solid var(--divider-color, #ccc);
-          border-radius: 6px;
-          padding: 0 10px;
-          font-size: 13px;
-          font-family: monospace;
-          background: var(--card-background-color, #fff);
-          color: var(--primary-text-color);
-        }
-        .toggle-row {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 5px 0;
-        }
-        .toggle-row label {
-          flex: 0 0 160px;
-          font-size: 13px;
-          color: var(--primary-text-color);
-        }
-        .toggle { position: relative; width: 44px; height: 24px; }
-        .toggle input { display: none; }
-        .toggle-slider {
-          position: absolute;
-          inset: 0;
-          background: var(--disabled-text-color, #ccc);
-          border-radius: 12px;
-          cursor: pointer;
-          transition: background 0.2s;
-        }
-        .toggle-slider::before {
-          content: '';
-          position: absolute;
-          width: 18px;
-          height: 18px;
-          left: 3px;
-          top: 3px;
-          background: white;
-          border-radius: 50%;
-          transition: transform 0.2s;
-        }
-        .toggle input:checked + .toggle-slider { background: var(--primary-color, #03a9f4); }
-        .toggle input:checked + .toggle-slider::before { transform: translateX(20px); }
-        #entity-slot,
-        #icon-slot { flex: 1; }
-      </style>
-      <div class="editor">
-
-        <div class="section-title">Entity &amp; Label</div>
-
-        <div class="row">
-          <label>Entity</label>
-          <div id="entity-slot"></div>
-        </div>
-
-        <div class="row">
-          <label>Friendly Name</label>
-          <input type="text" id="name" placeholder="e.g. Living Room Light" value="${c.name || ""}">
-        </div>
-
-        <div class="section-title">Colours</div>
-
-        <div class="color-row">
-          <label>Active Colour <span style="font-size:10px;opacity:.7">(entity ON)</span></label>
-          <div class="color-wrap">
-            <input type="color" id="active_color_picker" value="${c.active_color || "#ff3b3b"}">
-            <input type="text"  id="active_color"        value="${c.active_color || "#ff3b3b"}" placeholder="#ff3b3b">
-          </div>
-        </div>
-
-        <div class="color-row">
-          <label>Inactive Colour <span style="font-size:10px;opacity:.7">(entity OFF)</span></label>
-          <div class="color-wrap">
-            <input type="color" id="inactive_color_picker" value="${c.inactive_color || "#2c2c2e"}">
-            <input type="text"  id="inactive_color"        value="${c.inactive_color || "#2c2c2e"}" placeholder="#2c2c2e">
-          </div>
-        </div>
-
-        <div class="color-row">
-          <label>Name Text Colour</label>
-          <div class="color-wrap">
-            <input type="color" id="name_color_picker" value="${c.name_color || "#ffffff"}">
-            <input type="text"  id="name_color"        value="${c.name_color || "#ffffff"}" placeholder="#ffffff">
-          </div>
-        </div>
-
-        <div class="color-row">
-          <label>Icon Colour</label>
-          <div class="color-wrap">
-            <input type="color" id="icon_color_picker" value="${c.icon_color || "#ffffff"}">
-            <input type="text"  id="icon_color"        value="${c.icon_color || "#ffffff"}" placeholder="#ffffff">
-          </div>
-        </div>
-
-        <div class="section-title">Flash Animation</div>
-
-        <div class="toggle-row">
-          <label>Enable Flash</label>
-          <label class="toggle">
-            <input type="checkbox" id="flash_enabled" ${c.flash_enabled !== false ? "checked" : ""}>
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-
-        <div class="row">
-          <label>Flash Speed (ms)</label>
-          <input type="text" id="flash_speed" value="${c.flash_speed || 600}" placeholder="600">
-        </div>
-
-        <div class="section-title">Icon</div>
-
-        <div class="toggle-row">
-          <label>Show Icon</label>
-          <label class="toggle">
-            <input type="checkbox" id="show_icon" ${c.show_icon ? "checked" : ""}>
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-
-        <div class="row">
-          <label>Icon</label>
-          <div id="icon-slot"></div>
-        </div>
-
-        <div class="section-title">Layout</div>
-
-        <div class="row">
-          <label>Text Alignment</label>
-          <select id="text_align">
-            <option value="left"   ${c.text_align === "left"                          ? "selected" : ""}>Left</option>
-            <option value="center" ${(!c.text_align || c.text_align === "center")     ? "selected" : ""}>Center</option>
-            <option value="right"  ${c.text_align === "right"                         ? "selected" : ""}>Right</option>
-          </select>
-        </div>
-
-        <div class="row">
-          <label>Font Size</label>
-          <input type="text" id="font_size"  value="${c.font_size  || "14px"}" placeholder="14px">
-        </div>
-
-        <div class="row">
-          <label>Card Height</label>
-          <input type="text" id="card_height" value="${c.card_height || "54px"}" placeholder="54px">
-        </div>
-
-      </div>
-    `;
-
-    const bind = (id, key) => {
-      const el = this.shadowRoot.getElementById(id);
-      if (!el) return;
-      const update = () => { this._config = { ...this._config, [key]: el.value }; this._fire(this._config); };
-      el.addEventListener("change", update);
-      if (el.type === "text") el.addEventListener("input", update);
-    };
-
-    const bindCheckbox = (id, key) => {
-      const el = this.shadowRoot.getElementById(id);
-      if (!el) return;
-      el.addEventListener("change", () => { this._config = { ...this._config, [key]: el.checked }; this._fire(this._config); });
-    };
-
-    const bindColorPair = (pickerId, textId, key) => {
-      const picker = this.shadowRoot.getElementById(pickerId);
-      const text   = this.shadowRoot.getElementById(textId);
-      if (!picker || !text) return;
-      picker.addEventListener("input", () => {
-        text.value = picker.value;
-        this._config = { ...this._config, [key]: picker.value };
-        this._fire(this._config);
+      // Create ha-form once
+      this._form = document.createElement("ha-form");
+      this._form.computeLabel = (schema) => schema.label || schema.name;
+      this._form.addEventListener("value-changed", (e) => {
+        this._config = e.detail.value;
+        this.dispatchEvent(
+          new CustomEvent("config-changed", {
+            detail: { config: this._config },
+            bubbles: true,
+            composed: true,
+          })
+        );
       });
-      text.addEventListener("input", () => {
-        const val = text.value.trim();
-        if (/^#[0-9a-fA-F]{6}$/.test(val)) {
-          picker.value = val;
-          this._config = { ...this._config, [key]: val };
-          this._fire(this._config);
-        }
-      });
-    };
-
-    // ── ha-entity-picker — created imperatively so properties are set before upgrade ──
-    const entitySlot = this.shadowRoot.getElementById("entity-slot");
-    if (entitySlot) {
-      const entityPicker = document.createElement("ha-entity-picker");
-      entityPicker.style.flex = "1";
-      entityPicker.setAttribute("allow-custom-entity", "");
-      if (this._hass) entityPicker.hass = this._hass;
-      entityPicker.value = c.entity || "";
-      entityPicker.addEventListener("value-changed", (e) => {
-        this._config = { ...this._config, entity: e.detail.value };
-        this._fire(this._config);
-      });
-      entitySlot.appendChild(entityPicker);
+      this.shadowRoot.appendChild(this._form);
     }
 
-    // ── ha-icon-picker — same pattern ─────────────────────────────────────────────
-    const iconSlot = this.shadowRoot.getElementById("icon-slot");
-    if (iconSlot) {
-      const iconPicker = document.createElement("ha-icon-picker");
-      iconPicker.style.flex = "1";
-      iconPicker.placeholder = "mdi:lightbulb";
-      if (this._hass) iconPicker.hass = this._hass;
-      iconPicker.value = c.icon || "";
-      iconPicker.addEventListener("value-changed", (e) => {
-        this._config = { ...this._config, icon: e.detail.value };
-        this._fire(this._config);
-      });
-      iconSlot.appendChild(iconPicker);
-    }
-
-    bind("name",        "name");
-    bind("flash_speed", "flash_speed");
-    bind("text_align",  "text_align");
-    bind("font_size",   "font_size");
-    bind("card_height", "card_height");
-    bindCheckbox("flash_enabled", "flash_enabled");
-    bindCheckbox("show_icon",     "show_icon");
-    bindColorPair("active_color_picker",   "active_color",   "active_color");
-    bindColorPair("inactive_color_picker", "inactive_color", "inactive_color");
-    bindColorPair("name_color_picker",     "name_color",     "name_color");
-    bindColorPair("icon_color_picker",     "icon_color",     "icon_color");
+    // Update every time either config or hass changes
+    this._form.hass   = this._hass;
+    this._form.schema = BULL_SCHEMA;
+    this._form.data   = this._config;
   }
 }
 
@@ -407,7 +233,10 @@ class BullButtonCard extends HTMLElement {
   }
 
   _stopFlash() {
-    if (this._flashInterval) { clearInterval(this._flashInterval); this._flashInterval = null; }
+    if (this._flashInterval) {
+      clearInterval(this._flashInterval);
+      this._flashInterval = null;
+    }
   }
 
   _startFlash() {
@@ -421,7 +250,9 @@ class BullButtonCard extends HTMLElement {
     this._flashInterval   = setInterval(() => {
       this._flashState      = !this._flashState;
       pill.style.background = this._flashState ? active : "transparent";
-      pill.style.boxShadow  = this._flashState ? `0 0 18px 4px ${active}88` : "none";
+      pill.style.boxShadow  = this._flashState
+        ? `0 0 18px 4px ${active}88`
+        : "none";
     }, speed);
   }
 
@@ -445,13 +276,17 @@ class BullButtonCard extends HTMLElement {
     const domain  = entity.split(".")[0];
     const state   = this._hass.states[entity];
     if (!state) return;
-    this._hass.callService(domain, state.state === "on" ? "turn_off" : "turn_on", { entity_id: entity });
+    this._hass.callService(
+      domain,
+      state.state === "on" ? "turn_off" : "turn_on",
+      { entity_id: entity }
+    );
   }
 
   _render() {
-    const c      = this._config;
-    const align  = c.text_align || "center";
-    const height = c.card_height || "54px";
+    const c       = this._config;
+    const align   = c.text_align || "center";
+    const height  = c.card_height || "54px";
     const justify =
       align === "left"  ? "flex-start" :
       align === "right" ? "flex-end"   : "center";
@@ -507,13 +342,17 @@ class BullButtonCard extends HTMLElement {
       </style>
       <ha-card class="bull-card">
         <div class="bull-pill">
-          ${c.show_icon && c.icon ? `<ha-icon class="bull-icon" icon="${c.icon}"></ha-icon>` : ""}
+          ${c.show_icon && c.icon
+            ? `<ha-icon class="bull-icon" icon="${c.icon}"></ha-icon>`
+            : ""}
           <span class="bull-name">${c.name || c.entity || "Button"}</span>
         </div>
       </ha-card>
     `;
 
-    this.shadowRoot.querySelector(".bull-pill").addEventListener("click", () => this._toggle());
+    this.shadowRoot.querySelector(".bull-pill")
+      .addEventListener("click", () => this._toggle());
+
     this._updateState();
   }
 }
