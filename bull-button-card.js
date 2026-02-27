@@ -1,6 +1,6 @@
 /**
 
-- bull-button-card v1.0.0
+- bull-button-card v1.0.1
 - Pill-shaped entity button with fade animation, custom colours,
 - HA icon picker, animated icons, font style picker, and a visual editor.
 - https://github.com/jamesmcginnis/bull-button-card
