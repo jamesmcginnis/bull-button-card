@@ -580,7 +580,7 @@ class BullButtonCard extends HTMLElement {
     if (!pill) return;
     const on = this._isOn();
     if (on && this._config.flash_enabled !== false) {
-      this._startFlash();
+      if (!this._rafId) this._startFlash();
     } else {
       this._stopFlash();
       pill.style.transition = "";
