@@ -524,7 +524,9 @@ class BullButtonCard extends HTMLElement {
     const speed  = parseInt(this._config.flash_speed, 10) || 600;
     const active = this._config.active_color || "#ff3b3b";
     this._flashState      = true;
+    pill.style.transition = "none";
     pill.style.background = active;
+    pill.style.boxShadow  = `0 0 18px 4px ${active}88`;
     this._flashInterval   = setInterval(() => {
       this._flashState      = !this._flashState;
       pill.style.background = this._flashState ? active : "transparent";
@@ -542,6 +544,7 @@ class BullButtonCard extends HTMLElement {
       this._startFlash();
     } else {
       this._stopFlash();
+      pill.style.transition = "";
       const bg = on ? this._config.active_color : this._config.inactive_color;
       pill.style.background = bg || this._config.inactive_color;
       pill.style.boxShadow  = on ? `0 0 14px 3px ${bg}66` : "none";
