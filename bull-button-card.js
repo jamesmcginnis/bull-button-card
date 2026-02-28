@@ -452,8 +452,8 @@ class BullButtonCard extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
-    this._flashInterval = null;
-    this._flashState    = false;
+    this._rafId      = null;
+    this._rafStart   = null;
   }
 
   static getConfigElement() {
@@ -511,29 +511,68 @@ class BullButtonCard extends HTMLElement {
   }
 
   _stopFlash() {
-    if (this._flashInterval) {
-      clearInterval(this._flashInterval);
-      this._flashInterval = null;
+    if (this._rafId) {
+      cancelAnimationFrame(this._rafId);
+      this._rafId    = null;
+      this._rafStart = null;
     }
+  }
+
+  // Parse a #rrggbb hex string into [r, g, b]
+  _hexToRgb(hex) {
+    const h = hex.replace("#", "");
+    return [
+      parseInt(h.slice(0, 2), 16),
+      parseInt(h.slice(2, 4), 16),
+      parseInt(h.slice(4, 6), 16),
+    ];
+  }
+
+  // Linearly interpolate between two hex colours, t in [0, 1]
+  _lerpColor(hexA, hexB, t) {
+    const [r1, g1, b1] = this._hexToRgb(hexA);
+    const [r2, g2, b2] = this._hexToRgb(hexB);
+    const r = Math.round(r1 + (r2 - r1) * t);
+    const g = Math.round(g1 + (g2 - g1) * t);
+    const b = Math.round(b1 + (b2 - b1) * t);
+    return `rgb(${r},${g},${b})`;
   }
 
   _startFlash() {
     this._stopFlash();
-    const pill   = this.shadowRoot.querySelector(".bull-pill");
+    const pill = this.shadowRoot.querySelector(".bull-pill");
     if (!pill) return;
-    const speed  = parseInt(this._config.flash_speed, 10) || 600;
-    const active = this._config.active_color || "#ff3b3b";
-    this._flashState      = true;
+
+    // flash_speed is the half-period (time between brightest and dimmest),
+    // so a full sine cycle = speed * 2.
+    const halfPeriod = parseInt(this._config.flash_speed, 10) || 600;
+    const period     = halfPeriod * 2;
+    const active     = this._config.active_color   || "#ff3b3b";
+    const inactive   = this._config.inactive_color || "#2c2c2e";
+
+    // Remove CSS transition so RAF drives every frame cleanly.
     pill.style.transition = "none";
-    pill.style.background = active;
-    pill.style.boxShadow  = `0 0 18px 4px ${active}88`;
-    this._flashInterval   = setInterval(() => {
-      this._flashState      = !this._flashState;
-      pill.style.background = this._flashState ? active : "transparent";
-      pill.style.boxShadow  = this._flashState
-        ? `0 0 18px 4px ${active}88`
+
+    const animate = (timestamp) => {
+      if (!this._rafStart) this._rafStart = timestamp;
+      const elapsed = timestamp - this._rafStart;
+
+      // Sine wave mapped to [0, 1]: 0 = inactive, 1 = fully active
+      const t = (Math.sin((elapsed / period) * Math.PI * 2 - Math.PI / 2) + 1) / 2;
+
+      pill.style.background = this._lerpColor(inactive, active, t);
+
+      const glowSize  = (18 * t).toFixed(1);
+      const glowSpread = (4 * t).toFixed(1);
+      const glowAlpha = Math.round(t * 0xAA).toString(16).padStart(2, "0");
+      pill.style.boxShadow = t > 0.02
+        ? `0 0 ${glowSize}px ${glowSpread}px ${active}${glowAlpha}`
         : "none";
-    }, speed);
+
+      this._rafId = requestAnimationFrame(animate);
+    };
+
+    this._rafId = requestAnimationFrame(animate);
   }
 
   _updateState() {
