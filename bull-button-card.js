@@ -506,8 +506,19 @@ class BullButtonCard extends HTMLElement {
 
   _isOn() {
     if (!this._hass || !this._config) return false;
-    const state = this._hass.states[this._config.entity];
-    return state && state.state === "on";
+    // state_entity lets you read state from a different entity than the action entity.
+    // Useful for vacuum cards where you want to read vacuum.ruby state but
+    // call a script for the action.
+    const stateEntityId = this._config.state_entity || this._config.entity;
+    const state = this._hass.states[stateEntityId];
+    if (!state) return false;
+    // active_state lets you define which states count as "on".
+    // e.g. active_state: [cleaning, returning, paused] for a vacuum entity.
+    const activeStates = this._config.active_state;
+    if (Array.isArray(activeStates) && activeStates.length > 0) {
+      return activeStates.includes(state.state);
+    }
+    return state.state === "on";
   }
 
   _stopFlash() {
@@ -592,15 +603,51 @@ class BullButtonCard extends HTMLElement {
 
   _toggle() {
     if (!this._hass || !this._config) return;
-    const entity  = this._config.entity;
-    const domain  = entity.split(".")[0];
-    const state   = this._hass.states[entity];
+
+    const tapAction = this._config.tap_action;
+
+    // If a tap_action is configured, use that instead of the default toggle.
+    // Supports action: perform-action (HA 2024.8+) and action: call-service (legacy).
+    if (tapAction && tapAction.action !== "toggle" && tapAction.action !== "none") {
+      const service =
+        tapAction.perform_action ||   // HA 2024.8+ syntax
+        tapAction.service        ||   // legacy syntax
+        null;
+
+      if (service) {
+        const [domain, serviceCall] = service.split(".");
+        const serviceData = tapAction.service_data || tapAction.data || {};
+        const target      = tapAction.target || {};
+        this._hass.callService(domain, serviceCall, serviceData, target);
+        return;
+      }
+    }
+
+    if (tapAction && tapAction.action === "none") return;
+
+    // Default behaviour: smart toggle based on entity domain.
+    // Handles vacuum entities (start/stop) and everything else (turn_on/turn_off).
+    const entity = this._config.entity;
+    const domain = entity.split(".")[0];
+    const state  = this._hass.states[entity];
     if (!state) return;
-    this._hass.callService(
-      domain,
-      state.state === "on" ? "turn_off" : "turn_on",
-      { entity_id: entity }
-    );
+
+    const isOn = this._isOn();
+
+    if (domain === "vacuum") {
+      // vacuum.turn_on was removed from HA — use start/stop instead.
+      this._hass.callService(
+        "vacuum",
+        isOn ? "stop" : "start",
+        { entity_id: entity }
+      );
+    } else {
+      this._hass.callService(
+        domain,
+        isOn ? "turn_off" : "turn_on",
+        { entity_id: entity }
+      );
+    }
   }
 
   _render() {
@@ -690,7 +737,7 @@ window.customCards.push({
 });
 
 console.info(
-  "%c BULL-BUTTON-CARD %c v1.0.0 ",
+  "%c BULL-BUTTON-CARD %c v1.1.0 ",
   "background:#1a1a2e;color:#e94560;font-weight:700;padding:2px 6px;border-radius:4px 0 0 4px;",
   "background:#e94560;color:#fff;font-weight:700;padding:2px 6px;border-radius:0 4px 4px 0;"
 );
